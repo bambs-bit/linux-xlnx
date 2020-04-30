@@ -452,7 +452,7 @@ static int xgpio_irq_setup(struct device_node *np, struct xgpio_instance *chip)
 
 	chip->mmchip.gc.to_irq = xgpio_to_irq;
 
-	chip->irq_base = irq_alloc_descs(-1, 0, chip->mmchip.gc.ngpio, 0);
+	chip->irq_base = irq_alloc_descs(-1, 1, chip->mmchip.gc.ngpio, 0);
 	if (chip->irq_base < 0) {
 		pr_err("Couldn't allocate IRQ numbers\n");
 		return -1;
@@ -782,19 +782,7 @@ static struct platform_driver xilinx_gpio_driver = {
 	},
 };
 
-static int __init xgpio_init(void)
-{
-	return platform_driver_register(&xilinx_gpio_driver);
-}
-
-/* Make sure we get initialized before anyone else tries to use us */
-subsys_initcall(xgpio_init);
-
-static void __exit xgpio_exit(void)
-{
-	platform_driver_unregister(&xilinx_gpio_driver);
-}
-module_exit(xgpio_exit);
+module_platform_driver(xilinx_gpio_driver);
 
 MODULE_AUTHOR("Xilinx, Inc.");
 MODULE_DESCRIPTION("Xilinx GPIO driver");

@@ -332,6 +332,8 @@
 #define XCSI_GET_BITSET_STR(val, mask)	(val) & (mask) ? "true" : "false"
 
 #define XCSI_CLK_PROP		BIT(0)
+#define XCSI_DPHY_PROP		BIT(1)
+#define XCSI_DPHY_ADDR_PROP	BIT(2)
 
 /**
  * struct xcsi2rxss_feature - dt or IP property structure
@@ -512,6 +514,14 @@ struct xcsi2rxss_state {
 	bool suspended;
 };
 
+static const struct xcsi2rxss_feature xlnx_csi2rxss_v5_0 = {
+	.flags = XCSI_CLK_PROP | XCSI_DPHY_PROP | XCSI_DPHY_ADDR_PROP,
+};
+
+static const struct xcsi2rxss_feature xlnx_csi2rxss_v4_1 = {
+	.flags = XCSI_CLK_PROP | XCSI_DPHY_PROP,
+};
+
 static const struct xcsi2rxss_feature xlnx_csi2rxss_v4_0 = {
 	.flags = XCSI_CLK_PROP,
 };
@@ -527,6 +537,10 @@ static const struct of_device_id xcsi2rxss_of_id_table[] = {
 		.data = &xlnx_csi2rxss_v2_0 },
 	{ .compatible = "xlnx,mipi-csi2-rx-subsystem-4.0",
 		.data = &xlnx_csi2rxss_v4_0 },
+	{ .compatible = "xlnx,mipi-csi2-rx-subsystem-4.1",
+		.data = &xlnx_csi2rxss_v4_1 },
+	{ .compatible = "xlnx,mipi-csi2-rx-subsystem-5.0",
+		.data = &xlnx_csi2rxss_v5_0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, xcsi2rxss_of_id_table);
@@ -1623,11 +1637,24 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 	dev_dbg(core->dev, "IIC present property = %s\n",
 			iic_present ? "Present" : "Absent");
 
+	if (iic_present && (core->cfg->flags & XCSI_DPHY_PROP)) {
+		/*
+		 * In IP v4.1 the DPHY offset is 0x10000, if present,
+		 * and the iic is removed from subsystem.
+		 */
+		dev_err(core->dev, "Invalid case - IIC present!");
+		return -EINVAL;
+	}
+
 	if (core->dphy_present) {
-		if (iic_present)
+		if (iic_present) {
 			core->dphy_offset = 0x20000;
-		else
-			core->dphy_offset = 0x10000;
+		} else {
+			if (core->cfg->flags & XCSI_DPHY_ADDR_PROP)
+				core->dphy_offset = 0x1000;
+			else
+				core->dphy_offset = 0x10000;
+		}
 	}
 
 	ret = of_property_read_u32(node, "xlnx,max-lanes",
@@ -1697,7 +1724,7 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 		int ret;
 		const struct xvip_video_format *format;
 		struct device_node *endpoint;
-		struct v4l2_fwnode_endpoint v4lendpoint;
+		struct v4l2_fwnode_endpoint v4lendpoint = { 0 };
 
 		if (!port->name || of_node_cmp(port->name, "port"))
 			continue;
@@ -1757,7 +1784,7 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
 		dev_dbg(core->dev, "%s : port %d bus type = %d\n",
 				__func__, nports, v4lendpoint.bus_type);
 
-		if (v4lendpoint.bus_type == V4L2_MBUS_CSI2) {
+		if (v4lendpoint.bus_type == V4L2_MBUS_CSI2_DPHY) {
 			dev_dbg(core->dev, "%s : base.port = %d base.id = %d\n",
 					__func__,
 					v4lendpoint.base.port,
